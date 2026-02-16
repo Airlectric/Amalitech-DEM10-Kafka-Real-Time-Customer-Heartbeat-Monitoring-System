@@ -4,7 +4,8 @@ CREATE TABLE IF NOT EXISTS heartbeats_valid (
     customer_id VARCHAR(50) NOT NULL,
     timestamp TIMESTAMPTZ NOT NULL,
     heart_rate INTEGER NOT NULL,
-    anomaly BOOLEAN DEFAULT FALSE
+    anomaly BOOLEAN DEFAULT FALSE,
+    CONSTRAINT unique_heartbeat_valid UNIQUE (customer_id, timestamp)
 );
 CREATE INDEX IF NOT EXISTS idx_heartbeats_valid_timestamp ON heartbeats_valid (timestamp);
 
@@ -15,6 +16,7 @@ CREATE TABLE IF NOT EXISTS heartbeats_invalid (
     timestamp TIMESTAMPTZ,
     heart_rate INTEGER,
     error_reason TEXT NOT NULL,
-    received_at TIMESTAMPTZ DEFAULT NOW()
+    received_at TIMESTAMPTZ DEFAULT NOW(),
+    CONSTRAINT unique_heartbeat_invalid UNIQUE (customer_id, timestamp)
 );
 CREATE INDEX IF NOT EXISTS idx_heartbeats_invalid_timestamp ON heartbeats_invalid (timestamp);
