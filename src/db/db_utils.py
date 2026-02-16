@@ -24,6 +24,30 @@ def put_connection(conn):
     pg_pool.putconn(conn)
 
 
+def create_schema():
+    """Create database tables from schema.sql file"""
+    # Get the path to schema.sql (relative to project root)
+    current_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+    schema_path = os.path.join(current_dir, 'db', 'schema.sql')
+    
+    conn = get_connection()
+    try:
+        # Read SQL from file
+        with open(schema_path, 'r') as f:
+            sql = f.read()
+        
+        with conn:
+            with conn.cursor() as cur:
+                cur.execute(sql)
+                
+        logger.info(f"Database schema created successfully from {schema_path}")
+    except Exception as e:
+        logger.error(f"Error creating schema: {e}", exc_info=True)
+        raise
+    finally:
+        put_connection(conn)
+
+
 # Ensure uniqueness for idempotency: add a unique constraint on (customer_id, timestamp) in the DB for production
 def insert_valid_heartbeat(data):
     conn = get_connection()

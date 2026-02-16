@@ -34,7 +34,6 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./db:/docker-entrypoint-initdb.d
-      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql  # Add init script
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-heartbeat_user} -d ${POSTGRES_DB:-heartbeat_db}"]
       interval: 10s

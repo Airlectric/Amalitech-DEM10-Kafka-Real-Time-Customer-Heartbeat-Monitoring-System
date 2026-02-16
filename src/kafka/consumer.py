@@ -14,7 +14,8 @@ consumer = KafkaConsumer(
     auto_offset_reset='earliest',
     enable_auto_commit=False,  # Manual commit for durability
     max_poll_records=100,  # Batch processing
-    consumer_timeout_ms=1000
+    consumer_timeout_ms=1000,
+    group_id='heartbeat-consumer-group'  # Required for manual commits
 )
 
 def validate_heartbeat(data):
