@@ -2,20 +2,23 @@
 
 ## Project Overview
 
-This project implements a real-time data pipeline for monitoring customer heart rates using Apache Kafka, PostgreSQL, and Grafana. The system simulates heartbeat data from multiple customers, validates the readings in real-time, and stores valid and invalid records separately for analysis.
 
-The architecture follows a producer-consumer pattern where synthetic heartbeat data is generated, streamed through Kafka, processed and validated, then persisted to a PostgreSQL database. Grafana provides visualization capabilities for monitoring heart rate trends and data quality metrics.
+This project implements a real-time data pipeline for monitoring customer heart rates using Apache Kafka, PostgreSQL, and Grafana. The system simulates heartbeat data from multiple customers, validates the readings in real-time, and stores ALL events in a single raw events table. Alerts for rule violations are stored in a separate alerts table. All aggregations and counts are computed dynamically in Grafana using SQL queries.
+
+
+The architecture follows an event-driven pattern: synthetic heartbeat data is generated, streamed through Kafka, processed and validated, then persisted to a PostgreSQL database in a single heartbeats table. Alerts are generated for rule violations and stored in a dedicated alerts table. Grafana provides visualization and alerting using dynamic SQL queries.
 
 ## System Architecture
 
 ![Heartbeat Data Pipeline Architecture](docs/Workflow_Diagram.png)
 
+
 ### Data Flow
-1. **Data Generation Layer**: Python script generates synthetic heartbeat data with 80% valid (50-120 BPM) and 20% invalid readings
-2. **Message Streaming Layer**: Kafka Producer sends data to Kafka topic; Kafka Consumer reads and processes messages
-3. **Processing Layer**: Consumer validates heart rate ranges and routes data to appropriate tables
-4. **Storage Layer**: PostgreSQL stores valid records in `heartbeats_valid` and invalid records in `heartbeats_invalid`
-5. **Visualization Layer**: Grafana dashboards provide real-time monitoring and historical analysis
+1. **Data Generation Layer**: Python script generates synthetic heartbeat data with 80% valid (50-120 BPM) and 20% invalid readings, using the format: `patient_id`, `timestamp`, `heartbeat_value`, `status`.
+2. **Message Streaming Layer**: Kafka Producer sends data to Kafka topic; Kafka Consumer reads and processes messages.
+3. **Processing Layer**: Consumer validates heart rate and inserts ALL events into the `heartbeats` table, assigning a status (`valid`, `invalid_high`, `invalid_low`). If status is not `valid`, an alert is created in the `heartbeat_alerts` table.
+4. **Storage Layer**: PostgreSQL stores all events in `heartbeats` and only rule violations in `heartbeat_alerts`.
+5. **Visualization Layer**: Grafana dashboards provide real-time monitoring, dynamic aggregation, and alerting using SQL queries.
 
 ### Infrastructure Components
 - **Zookeeper**: Manages Kafka broker coordination
@@ -27,11 +30,13 @@ The architecture follows a producer-consumer pattern where synthetic heartbeat d
 
 - **Real-time heartbeat data simulation** with configurable customer count
 - **Data validation** (heart rate range: 50-120 BPM)
-- **Separate storage** for valid/invalid records with error reasons
+- **All events stored in a single `heartbeats` table**
+- **Alerts for rule violations stored in `heartbeat_alerts`**
+- **No aggregated counts stored in the database**
 - **Batch processing** for efficient database writes (100 messages per batch)
 - **Idempotent Kafka producer** to prevent duplicate messages
 - **Manual offset commit** for data durability
-- **Grafana visualization dashboard** with multiple panels
+- **Grafana visualization dashboard** with dynamic SQL queries and alerting
 - **Comprehensive logging** (general, error, warning, info levels)
 - **Connection pooling** for database efficiency
 - **Unit and integration tests** for all components
@@ -173,31 +178,41 @@ docker compose exec postgres psql -U heartbeat_user -d heartbeat_db -c "SELECT *
 
 ## Data Schema
 
-### Valid Heartbeats Table
+
+
+### Heartbeats Table
 ```sql
-CREATE TABLE heartbeats_valid (
+CREATE TABLE heartbeats (
     id SERIAL PRIMARY KEY,
-    customer_id VARCHAR(50) NOT NULL,
     timestamp TIMESTAMPTZ NOT NULL,
-    heart_rate INTEGER NOT NULL,
-    anomaly BOOLEAN DEFAULT FALSE,
-    CONSTRAINT unique_heartbeat_valid UNIQUE (customer_id, timestamp)
+    patient_id VARCHAR(50) NOT NULL,
+    heartbeat_value NUMERIC,
+    validation_status VARCHAR NOT NULL CHECK (validation_status IN ('valid', 'invalid_physiological', 'invalid_system', 'corrupted')),
+    anomaly_type VARCHAR,
+    raw_payload JSONB,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT anomaly_type_null_if_valid CHECK (
+        (validation_status = 'valid' AND anomaly_type IS NULL)
+        OR (validation_status != 'valid')
+    )
 );
-CREATE INDEX idx_heartbeats_valid_timestamp ON heartbeats_valid (timestamp);
+CREATE INDEX idx_heartbeats_timestamp ON heartbeats (timestamp);
+CREATE INDEX idx_heartbeats_patient_id ON heartbeats (patient_id);
 ```
 
-### Invalid Heartbeats Table
+### Heartbeat Alerts Table
 ```sql
-CREATE TABLE heartbeats_invalid (
-    id SERIAL PRIMARY KEY,
-    customer_id VARCHAR(50),
-    timestamp TIMESTAMPTZ,
-    heart_rate INTEGER,
-    error_reason TEXT NOT NULL,
-    received_at TIMESTAMPTZ DEFAULT NOW(),
-    CONSTRAINT unique_heartbeat_invalid UNIQUE (customer_id, timestamp)
+CREATE TABLE heartbeat_alerts (
+    alert_id SERIAL PRIMARY KEY,
+    heartbeat_id INTEGER REFERENCES heartbeats(id) ON DELETE CASCADE,
+    timestamp TIMESTAMPTZ NOT NULL,
+    patient_id VARCHAR(50),
+    heartbeat_value NUMERIC,
+    alert_category VARCHAR NOT NULL CHECK (alert_category IN ('physiological_anomaly', 'system_anomaly', 'data_corruption')),
+    resolved_flag BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
-CREATE INDEX idx_heartbeats_invalid_timestamp ON heartbeats_invalid (timestamp);
+CREATE INDEX idx_heartbeat_alerts_timestamp ON heartbeat_alerts (timestamp);
 ```
 
 ## Configuration
@@ -230,41 +245,41 @@ CREATE INDEX idx_heartbeats_invalid_timestamp ON heartbeats_invalid (timestamp);
 - `logs/info.log` - Info messages only
 - `logs/warning.log` - Warning messages only
 
-### Database Queries
+
+
+### Example Database Queries (for Grafana panels)
 
 ```sql
--- View recent valid heartbeats
-SELECT * FROM heartbeats_valid 
+-- View recent heartbeats
+SELECT * FROM heartbeats 
 ORDER BY timestamp DESC 
 LIMIT 10;
 
--- View invalid heartbeats with reasons
-SELECT * FROM heartbeats_invalid 
-ORDER BY received_at DESC 
+-- Count by validation_status
+SELECT validation_status, COUNT(*) as count 
+FROM heartbeats 
+GROUP BY validation_status;
+
+-- Heart rate statistics by patient
+SELECT 
+    patient_id,
+    MIN(heartbeat_value) as min_hr,
+    MAX(heartbeat_value) as max_hr,
+    AVG(heartbeat_value)::NUMERIC(10,2) as avg_hr,
+    COUNT(*) as total_records
+FROM heartbeats
+WHERE validation_status = 'valid'
+GROUP BY patient_id;
+
+-- Recent alerts
+SELECT * FROM heartbeat_alerts 
+ORDER BY timestamp DESC 
 LIMIT 10;
 
--- Count records by customer
-SELECT customer_id, COUNT(*) as record_count 
-FROM heartbeats_valid 
-GROUP BY customer_id 
-ORDER BY record_count DESC;
-
--- Heart rate statistics
-SELECT 
-    customer_id,
-    MIN(heart_rate) as min_hr,
-    MAX(heart_rate) as max_hr,
-    AVG(heart_rate)::NUMERIC(10,2) as avg_hr,
-    COUNT(*) as total_records
-FROM heartbeats_valid
-GROUP BY customer_id;
-
--- Invalid data summary
-SELECT 
-    error_reason,
-    COUNT(*) as count
-FROM heartbeats_invalid
-GROUP BY error_reason;
+-- Count alerts by category
+SELECT alert_category, COUNT(*) as count 
+FROM heartbeat_alerts 
+GROUP BY alert_category;
 ```
 
 ## Troubleshooting

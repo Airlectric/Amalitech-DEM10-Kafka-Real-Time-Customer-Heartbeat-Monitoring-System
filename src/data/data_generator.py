@@ -13,20 +13,17 @@ def generate_heartbeat():
     timestamp = datetime.utcnow().isoformat()
     # 80% valid, 20% invalid
     if random.random() < 0.8:
-        heart_rate = random.randint(HEART_RATE_MIN, HEART_RATE_MAX)
-        valid = True
+        heartbeat_value = random.randint(HEART_RATE_MIN, HEART_RATE_MAX)
     else:
-        # Generate invalid heart rate
+    # Generate invalid heart rate
         if random.random() < 0.5:
-            heart_rate = random.randint(INVALID_HEART_RATE_MIN, HEART_RATE_MIN - 1)
+            heartbeat_value = random.randint(-20, HEART_RATE_MIN - 1)  # can be negative for system anomaly
         else:
-            heart_rate = random.randint(HEART_RATE_MAX + 1, INVALID_HEART_RATE_MAX)
-        valid = False
+            heartbeat_value = random.randint(HEART_RATE_MAX + 1, 350)  # can be overflow for system anomaly
     return {
-        "customer_id": customer_id,
+        "patient_id": patient_id,
         "timestamp": timestamp,
-        "heart_rate": heart_rate,
-        "valid": valid
+        "heartbeat_value": heartbeat_value
     }
 
 if __name__ == "__main__":

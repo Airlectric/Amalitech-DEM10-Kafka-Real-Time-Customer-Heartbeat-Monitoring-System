@@ -49,40 +49,60 @@ def create_schema():
 
 
 # Ensure uniqueness for idempotency: add a unique constraint on (customer_id, timestamp) in the DB for production
-def insert_valid_heartbeat(data):
+
+
+# Insert a heartbeat event into the heartbeats table (new schema)
+def insert_heartbeat_event(data):
     conn = get_connection()
+    heartbeat_id = None
     try:
         with conn:
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    INSERT INTO heartbeats_valid (customer_id, timestamp, heart_rate, anomaly)
-                    VALUES (%s, %s, %s, %s)
-                    ON CONFLICT (customer_id, timestamp) DO NOTHING
+                    INSERT INTO heartbeats (timestamp, patient_id, heartbeat_value, validation_status, anomaly_type, raw_payload)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                    RETURNING id
                     """,
-                    (data["customer_id"], data["timestamp"], data["heart_rate"], data.get("anomaly", False))
+                    (
+                        data["timestamp"],
+                        data["patient_id"],
+                        data.get("heartbeat_value"),
+                        data["validation_status"],
+                        data.get("anomaly_type"),
+                        data.get("raw_payload")
+                    )
                 )
-        logger.info(f"Inserted valid heartbeat: {data}")
+                heartbeat_id = cur.fetchone()[0]
+        logger.info(f"Inserted heartbeat event: {data}")
+        return heartbeat_id
     except Exception as e:
-        logger.error(f"Error inserting valid heartbeat: {e}", exc_info=True)
+        logger.error(f"Error inserting heartbeat event: {e}", exc_info=True)
+        return None
     finally:
         put_connection(conn)
 
-def insert_invalid_heartbeat(data, error_reason):
+# Insert an alert for a rule violation (new schema)
+def insert_alert(heartbeat_id, data, alert_category):
     conn = get_connection()
     try:
         with conn:
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    INSERT INTO heartbeats_invalid (customer_id, timestamp, heart_rate, error_reason)
-                    VALUES (%s, %s, %s, %s)
-                    ON CONFLICT (customer_id, timestamp) DO NOTHING
+                    INSERT INTO heartbeat_alerts (heartbeat_id, timestamp, patient_id, heartbeat_value, alert_category)
+                    VALUES (%s, %s, %s, %s, %s)
                     """,
-                    (data.get("customer_id"), data.get("timestamp"), data.get("heart_rate"), error_reason)
+                    (
+                        heartbeat_id,
+                        data["timestamp"],
+                        data["patient_id"],
+                        data.get("heartbeat_value"),
+                        alert_category
+                    )
                 )
-        logger.warning(f"Inserted invalid heartbeat: {data} | Reason: {error_reason}")
+        logger.warning(f"Inserted alert for heartbeat_id={heartbeat_id}: {alert_category}")
     except Exception as e:
-        logger.error(f"Error inserting invalid heartbeat: {e}", exc_info=True)
+        logger.error(f"Error inserting alert: {e}", exc_info=True)
     finally:
         put_connection(conn)

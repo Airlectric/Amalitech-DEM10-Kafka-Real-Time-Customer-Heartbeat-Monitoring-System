@@ -20,8 +20,8 @@ def main():
     logger.info(f"Producing to Kafka topic '{KAFKA_TOPIC}' at broker '{KAFKA_BROKER}'...")
     try:
         while True:
-            heartbeat = generate_heartbeat()
-            producer.send(KAFKA_TOPIC, heartbeat).add_callback(on_send_success).add_errback(on_send_error)
+            event = generate_heartbeat()
+            producer.send(KAFKA_TOPIC, event).add_callback(on_send_success).add_errback(on_send_error)
             time.sleep(1)  # Simulate real-time
     except KeyboardInterrupt:
         logger.info("Producer stopped.")

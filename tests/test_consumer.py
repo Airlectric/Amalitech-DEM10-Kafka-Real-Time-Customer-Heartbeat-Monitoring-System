@@ -1,36 +1,51 @@
 import unittest
 from unittest.mock import patch, MagicMock
-from src.kafka.consumer import validate_heartbeat
-from src.config.config import HEART_RATE_MIN, HEART_RATE_MAX
+
+
+from src.kafka.consumer import classify_heartbeat
 
 class TestConsumer(unittest.TestCase):
-    def test_validate_heartbeat_valid(self):
-        """Test validation accepts valid heart rates"""
-        valid_data = {'heart_rate': 75}
-        is_valid, reason = validate_heartbeat(valid_data)
-        self.assertTrue(is_valid)
-        self.assertIsNone(reason)
-    
-    def test_validate_heartbeat_invalid_low(self):
-        """Test validation rejects heart rate too low"""
-        invalid_data = {'heart_rate': 30}
-        is_valid, reason = validate_heartbeat(invalid_data)
-        self.assertFalse(is_valid)
-        self.assertIn('out of range', reason)
-    
-    def test_validate_heartbeat_invalid_high(self):
-        """Test validation rejects heart rate too high"""
-        invalid_data = {'heart_rate': 150}
-        is_valid, reason = validate_heartbeat(invalid_data)
-        self.assertFalse(is_valid)
-        self.assertIn('out of range', reason)
-    
-    def test_validate_heartbeat_missing(self):
-        """Test validation handles missing heart_rate"""
-        invalid_data = {'customer_id': 'TEST'}
-        is_valid, reason = validate_heartbeat(invalid_data)
-        self.assertFalse(is_valid)
-        self.assertIn('Missing', reason)
+    def test_classify_heartbeat_valid(self):
+        event = {'heartbeat_value': 75}
+        result = classify_heartbeat(event)
+        self.assertEqual(result['validation_status'], 'valid')
+        self.assertIsNone(result['anomaly_type'])
+        self.assertIsNone(result['alert_category'])
+
+    def test_classify_heartbeat_low_bpm(self):
+        event = {'heartbeat_value': 30}
+        result = classify_heartbeat(event)
+        self.assertEqual(result['validation_status'], 'invalid_physiological')
+        self.assertEqual(result['anomaly_type'], 'low_bpm')
+        self.assertEqual(result['alert_category'], 'physiological_anomaly')
+
+    def test_classify_heartbeat_high_bpm(self):
+        event = {'heartbeat_value': 150}
+        result = classify_heartbeat(event)
+        self.assertEqual(result['validation_status'], 'invalid_physiological')
+        self.assertEqual(result['anomaly_type'], 'high_bpm')
+        self.assertEqual(result['alert_category'], 'physiological_anomaly')
+
+    def test_classify_heartbeat_negative(self):
+        event = {'heartbeat_value': -10}
+        result = classify_heartbeat(event)
+        self.assertEqual(result['validation_status'], 'invalid_system')
+        self.assertEqual(result['anomaly_type'], 'negative_value')
+        self.assertEqual(result['alert_category'], 'system_anomaly')
+
+    def test_classify_heartbeat_null(self):
+        event = {'heartbeat_value': None}
+        result = classify_heartbeat(event)
+        self.assertEqual(result['validation_status'], 'invalid_system')
+        self.assertEqual(result['anomaly_type'], 'null_value')
+        self.assertEqual(result['alert_category'], 'system_anomaly')
+
+    def test_classify_heartbeat_parsing_error(self):
+        event = {'heartbeat_value': 'not_a_number'}
+        result = classify_heartbeat(event)
+        self.assertEqual(result['validation_status'], 'corrupted')
+        self.assertEqual(result['anomaly_type'], 'parsing_error')
+        self.assertEqual(result['alert_category'], 'data_corruption')
 
 if __name__ == "__main__":
     unittest.main()
