@@ -3,6 +3,8 @@ from psycopg2.extras import execute_values
 from src.config.config import POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB, POSTGRES_HOST, POSTGRES_PORT
 from src.config.logger import get_logger
 
+import os
+
 logger = get_logger("DBUtils")
 
 # Connection pool for efficiency
@@ -20,6 +22,25 @@ def get_connection():
 
 def put_connection(conn):
     pg_pool.putconn(conn)
+
+def create_schema():
+    """
+    Initializes the database schema from db/schema.sql.
+    Run this once at startup or as needed.
+    """
+    schema_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "db", "schema.sql")
+    with open(schema_path, "r") as f:
+        schema_sql = f.read()
+    conn = get_connection()
+    try:
+        with conn:
+            with conn.cursor() as cur:
+                cur.execute(schema_sql)
+        logger.info("Database schema created or verified.")
+    except Exception as e:
+        logger.error(f"Error creating schema: {e}", exc_info=True)
+    finally:
+        put_connection(conn)
 
 # Ensure uniqueness for idempotency: add a unique constraint on (customer_id, timestamp) in the DB for production
 def insert_valid_heartbeat(data):
