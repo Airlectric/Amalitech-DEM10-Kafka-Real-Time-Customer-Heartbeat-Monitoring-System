@@ -48,7 +48,7 @@ The architecture follows a producer-consumer pattern where synthetic heartbeat d
 ### 1. Clone and Setup
 
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/Airlectric/Amalitech-DEM10-Kafka-Real-Time-Customer-Heartbeat-Monitoring-System.git
 cd Amalitech-DEM10-Kafka-Real-Time-Customer-Heartbeat-Monitoring-System
 cp .env.example .env
 ```
@@ -334,6 +334,6 @@ docker compose up -d
 
 ---
 
-**Author:** Your Name  
+**Author:** Doe Agudey Daniel 
 **Project:** Amalitech-DEM10 Kafka Real-Time Customer Heartbeat Monitoring System  
 **Last Updated:** 2026-02-16
