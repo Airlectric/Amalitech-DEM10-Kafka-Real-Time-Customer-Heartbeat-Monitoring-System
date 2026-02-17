@@ -66,6 +66,23 @@ docker compose up -d
 
 Wait for all containers to be healthy (about 30 seconds).
 
+#### Docker Containers Status
+
+Once started, verify all services are running:
+
+![Docker Services Running](docs/screenshots/docker/docker_running%20.png)
+
+*All infrastructure services (Zookeeper, Kafka, PostgreSQL, Grafana) running in Docker containers*
+
+You can check container status:
+```bash
+docker compose ps
+```
+
+![Docker PS Output](docs/screenshots/docker/docker_ps.png)
+
+*Container status showing all services are healthy and running on their respective ports*
+
 ### 3. Install Python Dependencies
 
 ```bash
@@ -76,24 +93,42 @@ pip install -r requirements.txt
 
 **Option A: Run both producer and consumer together**
 ```bash
-python src/main.py --both
+python -m src.main.py --both
 ```
 
 **Option B: Run separately (in different terminals)**
 ```bash
 # Terminal 1 - Producer
-python src/main.py --producer
+python -m src.main.py --producer
 
 # Terminal 2 - Consumer
-python src/main.py --consumer
+python -m src.main.py --consumer
 ```
 
 **Option C: Initialize database only**
 ```bash
-python src/main.py --init-db
+python -m src.main.py --init-db
 ```
 
 Press `Ctrl+C` to stop the pipeline.
+
+### Pipeline in Action
+
+#### Kafka Producer Running
+
+When the producer starts, it generates synthetic heartbeat data and publishes to the Kafka topic:
+
+![Kafka Producer Running](docs/screenshots/kafka/producer_running.png)
+
+*Kafka Producer generating synthetic heartbeat data from multiple patients and publishing to the `heartbeats` topic. Shows patient_id, timestamp, and heartbeat_value being sent.*
+
+#### Kafka Consumer Processing
+
+The consumer reads messages from Kafka, validates them, and inserts into PostgreSQL:
+
+![Kafka Consumer Running](docs/screenshots/kafka/consumer_running.png)
+
+*Kafka Consumer reading messages from the topic, validating heartbeat values (50-120 BPM range), and inserting valid/invalid records into the database. Shows batch processing of 100 messages per commit.*
 
 ### 5. Access Grafana Dashboard
 
@@ -214,6 +249,63 @@ After importing, you can customize:
   - Verify field names match your database columns
   - Check the Value Mappings configuration
 
+---
+
+## 📦 Database Verification
+
+After running the pipeline, verify that data is being stored correctly in PostgreSQL:
+
+### Heartbeats Table
+
+The main table stores ALL heartbeat events (both valid and invalid):
+
+![Heartbeat Table Records](docs/screenshots/postgres_tables/heartbeat_table_with_records.png)
+
+*PostgreSQL `heartbeats` table showing records with:
+- Valid readings (50-120 BPM) marked with `validation_status = 'valid'`
+- Invalid physiological readings marked with `validation_status = 'invalid_physiological'`
+- System anomalies marked with `validation_status = 'invalid_system'`
+- Corrupted data marked with `validation_status = 'corrupted'`
+- Associated `anomaly_type` for invalid records*
+
+### Heartbeat Alerts Table
+
+The alerts table stores only rule violations for monitoring:
+
+![Alerts Table Records](docs/screenshots/postgres_tables/heartbeat_alerts_table_with_records.png)
+
+*PostgreSQL `heartbeat_alerts` table showing alert records with:
+- Reference to the original heartbeat record (`heartbeat_id`)
+- Alert categories: physiological_anomaly, system_anomaly, data_corruption
+- `resolved_flag` to track if alert has been addressed
+- Patient identification and heartbeat value at time of alert*
+
+---
+
+## 🧪 Testing Results
+
+All components include comprehensive unit and integration tests:
+
+### Test Suite Results
+
+![Test Results](docs/screenshots/test/tests_results.png)
+
+*Complete test suite execution showing:
+- ✅ Data generator tests (synthetic heartbeat generation)
+- ✅ Kafka producer tests (message publishing)
+- ✅ Kafka consumer tests (message processing and validation)
+- ✅ End-to-end pipeline tests (full integration)
+- All tests passing with detailed output*
+
+### Running Tests
+
+```bash
+# Run all tests
+python -m unittest discover tests/ -v
+```
+
+---
+
 ## Project Structure
 
 ```
@@ -280,11 +372,11 @@ python -m unittest tests.test_end_to_end -v
 
 ```bash
 # Check database records
-docker compose exec postgres psql -U heartbeat_user -d heartbeat_db -c "SELECT COUNT(*) FROM heartbeats_valid;"
-docker compose exec postgres psql -U heartbeat_user -d heartbeat_db -c "SELECT COUNT(*) FROM heartbeats_invalid;"
+docker compose exec postgres psql -U heartbeat_user -d heartbeat_db -c "SELECT COUNT(*) FROM heartbeats;"
+docker compose exec postgres psql -U heartbeat_user -d heartbeat_db -c "SELECT COUNT(*) FROM heartbeats_alerts;"
 
 # View recent records
-docker compose exec postgres psql -U heartbeat_user -d heartbeat_db -c "SELECT * FROM heartbeats_valid ORDER BY timestamp DESC LIMIT 5;"
+docker compose exec postgres psql -U heartbeat_user -d heartbeat_db -c "SELECT * FROM heartbeats ORDER BY timestamp DESC LIMIT 5;"
 ```
 
 ## Data Schema
@@ -437,8 +529,14 @@ docker compose up -d
 # View service logs
 docker compose logs -f
 
+# Terminal 1
+python -m src.main  --producer
+
+# Terminal 2
+python -m src.main  --consumer
+
 # Run the complete pipeline
-python src/main.py --both
+python -m src.main.py --both
 
 # Run tests
 python -m unittest discover tests/ -v
@@ -456,7 +554,7 @@ docker compose up -d
 
 ## License
 
-[Add your license information here]
+MIT
 
 ---
 
