@@ -21,7 +21,7 @@ def generate_heartbeat():
         else:
             heartbeat_value = random.randint(HEART_RATE_MAX + 1, 350)  # can be overflow for system anomaly
     return {
-        "patient_id": patient_id,
+        "patient_id": customer_id,
         "timestamp": timestamp,
         "heartbeat_value": heartbeat_value
     }

@@ -1,5 +1,6 @@
 import psycopg2
 from psycopg2.extras import execute_values
+import json
 from src.config.config import POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB, POSTGRES_HOST, POSTGRES_PORT
 from src.config.logger import get_logger
 
@@ -58,6 +59,9 @@ def insert_heartbeat_event(data):
     try:
         with conn:
             with conn.cursor() as cur:
+                raw_payload = data.get("raw_payload")
+                if raw_payload is not None and not isinstance(raw_payload, str):
+                    raw_payload = json.dumps(raw_payload)
                 cur.execute(
                     """
                     INSERT INTO heartbeats (timestamp, patient_id, heartbeat_value, validation_status, anomaly_type, raw_payload)
@@ -70,7 +74,7 @@ def insert_heartbeat_event(data):
                         data.get("heartbeat_value"),
                         data["validation_status"],
                         data.get("anomaly_type"),
-                        data.get("raw_payload")
+                        raw_payload
                     )
                 )
                 heartbeat_id = cur.fetchone()[0]
