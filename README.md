@@ -101,6 +101,119 @@ Press `Ctrl+C` to stop the pipeline.
 - Username: `admin`
 - Password: `admin` (or as configured in `.env`)
 
+---
+
+## 📊 Grafana Dashboard
+
+### Dashboard Overview
+
+The system includes a pre-configured Grafana dashboard with multiple panels for real-time monitoring:
+
+**Dashboard Features:**
+- 📈 **Total Heartbeats** - Live count of all heartbeat events
+- 🎯 **Valid vs Invalid** - Pie chart showing data validation breakdown
+- ⚠️ **Anomalies** - Classification of physiological vs system anomalies
+- 🚨 **Active Alerts** - Real-time alert counter with visual indicators
+- 📉 **Heartbeat Trends** - Time-series visualization of heart rate patterns
+- 📋 **Recent Alerts Table** - Detailed view of recent alert events
+- 📊 **Alerts Over Time** - Historical trend of alert frequency
+
+### Dashboard Screenshots
+
+#### First Half - Overview Panels
+![Dashboard First Half](docs/screenshots/dashboard/Dashboard_first_half.png)
+
+*Shows the top-level metrics including total heartbeats, active alerts, and validation status breakdown*
+
+#### Second Half - Detailed Analytics
+![Dashboard Second Half](docs/screenshots/dashboard/Dashboard_Second_half.png)
+
+*Displays time-series trends, recent alerts table, and anomaly classifications*
+
+### Importing the Dashboard
+
+You can easily import the pre-configured dashboard into any Grafana instance:
+
+#### Method 1: Import via JSON File
+
+1. **Access Grafana**: Navigate to your Grafana instance (e.g., http://localhost:3000)
+2. **Open Import**: Click **☰ (hamburger menu)** → **"Dashboards"** → **"+ New"** → **"Import"**
+3. **Upload JSON**:
+   - Click **"Upload dashboard JSON file"**
+   - Select the file: `Heartbeat Monitoring System Dashboard Grafana.json` from the project root
+   - Or copy-paste the JSON content directly into the text area
+4. **Configure Data Source**:
+   - Select your PostgreSQL data source from the dropdown
+   - The dashboard expects a data source named "PostgreSQL" or similar
+5. **Import**: Click **"Import"** button
+6. **Done!** The dashboard will load with all panels configured
+
+#### Method 2: Manual Import Steps
+
+```bash
+# The JSON file is located at:
+# Heartbeat Monitoring System Dashboard Grafana.json
+```
+
+1. In Grafana, go to: **Dashboards** → **Import**
+2. Click **"Upload .json File"**
+3. Browse to the project directory and select: `Heartbeat Monitoring System Dashboard Grafana.json`
+4. Map the data source:
+   - Choose your PostgreSQL connection
+   - If no data source exists, create one first (see below)
+5. Click **"Import"**
+
+#### Setting Up PostgreSQL Data Source (if needed)
+
+If you haven't configured the PostgreSQL data source yet:
+
+1. **Go to**: **☰** → **"Connections"** → **"Data Sources"**
+2. **Add Data Source**: Click **"+ Add new data source"**
+3. **Select**: **"PostgreSQL"**
+4. **Configure**:
+   - **Host**: `postgres:5432` (or `localhost:5432` if not using Docker)
+   - **Database**: `heartbeat_db`
+   - **User**: `heartbeat_user`
+   - **Password**: `heartbeat_pass`
+   - **SSL Mode**: `disable`
+5. **Test**: Click **"Save & Test"** - should show "Database Connection OK"
+6. **Return to Import**: Now import the dashboard JSON
+
+### Dashboard JSON Location
+
+```
+project-root/
+├── Heartbeat Monitoring System Dashboard Grafana.json  ← Dashboard export file
+├── docker-compose.yml
+├── README.md
+└── ...
+```
+
+### Customizing the Dashboard
+
+After importing, you can customize:
+- **Time Range**: Default is "Last 5 minutes" - adjust as needed
+- **Refresh Interval**: Default is "10s" - change for more/less frequent updates
+- **Colors**: Edit panel overrides to match your preferences
+- **Thresholds**: Modify alert thresholds in the "Active Alerts" panel
+
+### Troubleshooting Import Issues
+
+**Issue**: "Data source not found" error
+- **Solution**: Create the PostgreSQL data source first (see steps above), then re-import
+
+**Issue**: Panels show "No data"
+- **Solution**: 
+  - Verify the data source connection is working
+  - Check that data exists in PostgreSQL (run the pipeline first)
+  - Adjust the time range to include recent data
+
+**Issue**: Colors not showing correctly
+- **Solution**: 
+  - Edit the panel → Go to "Overrides" tab
+  - Verify field names match your database columns
+  - Check the Value Mappings configuration
+
 ## Project Structure
 
 ```
@@ -138,9 +251,7 @@ project-root/
 │   ├── setup_guide.md
 │   ├── system_architecture.md
 │   └── Workflow_Diagram.png
-└── notes/                  # Project notes
-    ├── project_instructions.md
-    └── COMPLETION_GUIDE.md
+
 ```
 
 ## Testing
